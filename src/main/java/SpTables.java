@@ -1,0 +1,259 @@
+//package spreadsheet_program;
+
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
+import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
+import java.io.FileReader;
+import java.io.Reader;
+import javax.swing.AbstractCellEditor;
+import javax.swing.AbstractListModel;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultCellEditor;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.table.AbstractTableModel;
+import javax.swing.table.JTableHeader;
+import javax.swing.table.TableCellEditor;
+import javax.swing.table.TableColumn;
+import javax.swing.table.TableColumnModel;
+import javax.swing.table.TableModel;
+
+import org.w3c.dom.Text;
+import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
+public class SpTables {
+
+	//Tables
+	private Gson gson;
+	public TableModel TblDataModel;
+	public JTable Tbl;
+	public JScrollPane TblScroll;
+	public String[][] TblData;
+	public SpTblHandler TblHandler;
+	public int TblW = 100; 
+	public int TblH = 100;
+	/*
+	 * On the Load and Save methods:
+	 * 
+	 * This is not the best way to do it,
+	 * it would be more clever to use a database 
+	 * to store the cells the user has changed,
+	 * because this approach does not scale
+	 * well. For large spreadsheets with more
+	 * than 100x100 sized tables, it can load 
+	 * a lot of memory into ram even it is 
+	 * mostly empty.
+	 * 
+	 * TODO: Make this use a database (SQLite,probably)
+	 * to query and save the spreadsheet. Not now,
+	 * as it is a small project.
+	 */
+	
+	public void saveFileAs(String fileloc) {
+		try (Writer w = new FileWriter("C:\\Users\\user\\Desktop\\programming\\misc\\test.json")){
+			List<List<Object>> data = new ArrayList<>();
+			for(int i = 0;i < Tbl.getColumnCount(); i++) {
+				List<Object> row = new ArrayList<>();
+				for(int j = 0;j < Tbl.getRowCount(); j++) {
+					Object a = Tbl.getValueAt(j, i);
+					if(a == null) continue;
+					row.add(a.toString());
+				}
+				//if(row.isEmpty()) continue;
+				data.add(row);
+			}
+			gson.toJson(data, w);
+		}catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	public void loadFrom(String fileloc) {
+		try (Reader r = new FileReader("C:\\Users\\user\\Desktop\\programming\\misc\\test.json")){
+			List<List<Object>> data = new ArrayList<>();
+			Type type = new TypeToken<List<List<Object>>>(){}.getType();
+			data = gson.fromJson(r, type);
+			for(int i = 0;i < data.size(); i++) {
+				if(data.get(i).size() == 0) continue;
+				for(int j = 0;j < data.get(i).size(); j++) {
+					Tbl.setValueAt(data.get(i).get(j), j, i);
+				}
+			}
+		}catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	private class EditDialog extends AbstractCellEditor implements TableCellEditor{
+		private String value = "";
+		@Override
+		public Object getCellEditorValue() {
+			return value;
+		}
+		@Override
+		public Component getTableCellEditorComponent(
+				JTable table,
+				Object val,
+				boolean isSelected,
+				int row,
+				int column)
+		{
+				value = (val == null) ? "" : val.toString();
+			SwingUtilities.invokeLater(() ->{
+					JTextArea text = new JTextArea(value,20,50);
+					//int finish = JOptionPane.showConfirmDialog(table, "Finish editing","test",JOptionPane.YES_NO_OPTION);
+					int finish = JOptionPane.showConfirmDialog(table, new JScrollPane(text),"Edit window", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+					text.requestFocus();
+					if(finish == JOptionPane.OK_OPTION) {
+						//table.setValueAt(text.getText(), row, column);
+						value = text.getText();
+						this.fireEditingStopped();
+					} else {
+						this.fireEditingCanceled();
+					}
+				}
+			);
+			return new JTable();
+		}
+	}
+	private class ColListener implements MouseListener{
+		@Override
+		public void mouseClicked(MouseEvent e) {
+			JTableHeader t = Tbl.getTableHeader();
+			int c = t.columnAtPoint(e.getPoint());
+			if(c > -1) {
+				int icol = Tbl.convertColumnIndexToModel(c);
+				if(e.getClickCount() == 2) {
+					TableColumn col = Tbl.getColumnModel().getColumn(icol);
+					int biggest = 0;
+					int j = 0;
+					for(int i = 0; i < TblH; i++) {
+						if(TblData[i][icol] == null) continue;
+						if(TblData[i][icol].length() > biggest) {
+							biggest = TblData[i][icol].length();
+							j = i;
+						}
+					}
+					double w = Tbl.getFontMetrics(Tbl.getFont()).getStringBounds(TblData[j][icol], Tbl.getGraphics()).getWidth();
+					System.out.println(w);
+					col.setPreferredWidth((biggest == 0) ? 75 : (int)Math.ceil(w)+10);
+				}
+			}
+		}
+		@Override
+		public void mousePressed(MouseEvent e) {
+			// TODO Auto-generated method stub
+		}
+		@Override
+		public void mouseReleased(MouseEvent e) {
+			// TODO Auto-generated method stub	
+		}
+		@Override
+		public void mouseEntered(MouseEvent e) {
+			// TODO Auto-generated method stub	
+		}
+		@Override
+		public void mouseExited(MouseEvent e) {
+			// TODO Auto-generated method stub	
+		}
+	}
+	SpTables() {	
+		gson = new GsonBuilder().setPrettyPrinting().create();
+		TblHandler = new SpTblHandler(); 
+		TblData = new String[TblH][TblW];
+		TblDataModel = (TableModel) new AbstractTableModel() {
+			@Override
+	    	public int getColumnCount() { 
+	    		return TblW; 
+	    	}
+			@Override
+	    	public int getRowCount() { 
+	    		return TblH;
+	    	}
+			@Override
+	        public Object getValueAt(int row, int col) { 
+	        	return TblData[row][col]; 
+	        }
+			@Override
+			public boolean isCellEditable(int row,int col) {
+				return true;
+			}
+			@Override
+			public void setValueAt(Object value,int row,int col) {
+				TblData[row][col] = value.toString();
+		        this.fireTableCellUpdated(row, col);
+			}
+			
+	    };
+	    // ONLY FOR TESTING!!! 
+	    /*
+	    TblData[0][0] =  "First Row First Column";
+	    TblData[1][0] =  "Second Row First Column";
+	    TblData[0][1] =  "First Row Second Column";
+	    TblData[1][1] =  "Second Row Second Column";
+	    TblData[0][3] =  "First Row Fourth Column";
+	    TblData[1][3] =  "Second Row Fourth Column";
+	    */
+	    // ONLY FOR TESTING!!! end
+	    TblDataModel.addTableModelListener(TblHandler);
+	    Tbl = new JTable(TblDataModel);
+	    Tbl.setDefaultEditor(Object.class, new EditDialog());
+	    Tbl.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+	    TblScroll = new JScrollPane(Tbl);
+	    Tbl.getTableHeader().setReorderingAllowed(false);
+	    Tbl.getTableHeader().addMouseListener(new ColListener());
+	    JList<String> TblRows = new JList<>(new AbstractListModel<String>() {
+			@Override
+			public int getSize() {
+				return Tbl.getRowCount();
+			}
+			@Override
+			public String getElementAt(int index) {
+				return String.valueOf(index);
+			}
+		});
+	    TblRows.setCellRenderer(new DefaultListCellRenderer() {
+			@Override
+			public Component getListCellRendererComponent(
+					JList<? extends Object> list,
+					Object value,
+					int index,
+					boolean isSelected,
+					boolean cellHasFocus) 
+				{
+				JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, false, false);
+				label.setFont(Tbl.getFont());
+				label.setHorizontalAlignment(CENTER);
+				label.setOpaque(true);
+				label.setBackground(UIManager.getColor("TableHeader.background"));
+				label.setBorder(BorderFactory.createMatteBorder(0, 0, 1 , 1, Color.black));
+				return label;
+			}
+
+	    });
+	    TableColumnModel m = Tbl.getColumnModel();
+	    for(int i = 0 ; i < m.getColumnCount();i++) {
+	    	m.getColumn(i).setIdentifier(i);
+	    }
+	    TblRows.setFixedCellWidth(50);
+	    TblRows.setFixedCellHeight(Tbl.getRowHeight());
+	    TblScroll.setRowHeaderView(TblRows);
+	    Tbl.setDragEnabled(false);
+	}
+}
