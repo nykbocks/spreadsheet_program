@@ -1,4 +1,6 @@
 //package spreadsheet_program;
+package spreadsheet_program;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseListener;

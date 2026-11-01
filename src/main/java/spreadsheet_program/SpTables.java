@@ -1,4 +1,5 @@
 //package spreadsheet_program;
+package spreadsheet_program;
 
 import java.awt.Color;
 import java.awt.Component;
@@ -20,6 +21,7 @@ import javax.swing.AbstractListModel;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultCellEditor;
 import javax.swing.DefaultListCellRenderer;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
@@ -29,6 +31,7 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellEditor;
@@ -43,13 +46,14 @@ public class SpTables {
 
 	//Tables
 	private Gson gson;
-	public TableModel TblDataModel;
+	public AbstractTableModel TblDataModel;
 	public JTable Tbl;
 	public JScrollPane TblScroll;
 	public String[][] TblData;
 	public SpTblHandler TblHandler;
 	public int TblW = 100; 
 	public int TblH = 100;
+	public JList<String> TblRows;
 	/*
 	 * On the Load and Save methods:
 	 * 
@@ -66,9 +70,23 @@ public class SpTables {
 	 * to query and save the spreadsheet. Not now,
 	 * as it is a small project.
 	 */
-	
+	public String GetFilePath() {
+		JFileChooser fc = new JFileChooser();
+		FileNameExtensionFilter ef = new FileNameExtensionFilter("SP Files", "json","sp");
+		fc.setFileFilter(ef);
+		fc.setCurrentDirectory(new java.io.File("."));
+		fc.setLocation(0, 0);
+		int rfc = fc.showOpenDialog(Tbl);
+		String path = null;
+		if(rfc == JFileChooser.APPROVE_OPTION) {
+			path = fc.getSelectedFile().getAbsolutePath();
+		}
+		return path;
+	}
 	public void saveFileAs(String fileloc) {
-		try (Writer w = new FileWriter("C:\\Users\\user\\Desktop\\programming\\misc\\test.json")){
+		String path = GetFilePath();
+		if(path == null) return;
+		try (Writer w = new FileWriter(path)){
 			List<List<Object>> data = new ArrayList<>();
 			for(int i = 0;i < Tbl.getColumnCount(); i++) {
 				List<Object> row = new ArrayList<>();
@@ -86,7 +104,9 @@ public class SpTables {
 		}
 	}
 	public void loadFrom(String fileloc) {
-		try (Reader r = new FileReader("C:\\Users\\user\\Desktop\\programming\\misc\\test.json")){
+		String path = GetFilePath();
+		if(path == null) return;
+		try (Reader r = new FileReader(path)){
 			List<List<Object>> data = new ArrayList<>();
 			Type type = new TypeToken<List<List<Object>>>(){}.getType();
 			data = gson.fromJson(r, type);
@@ -132,6 +152,23 @@ public class SpTables {
 			return new JTable();
 		}
 	}
+	private void OpenEditDialog(int row,int col) {
+		
+	    Object current = Tbl.getValueAt(row, col);
+	    JTextArea area = new JTextArea(current == null ? "" : current.toString(), 20, 50);
+	    area.setLineWrap(true);
+	    area.setWrapStyleWord(true);
+	    int result = JOptionPane.showConfirmDialog(
+	            Tbl,
+	            new JScrollPane(area),
+	            "Edit " + Tbl.getColumnName(col) + row,   // your row header starts at 0, so no +1
+	            JOptionPane.OK_CANCEL_OPTION,
+	            JOptionPane.PLAIN_MESSAGE);
+
+	    if (result == JOptionPane.OK_OPTION) {
+	        Tbl.setValueAt(area.getText(), row, col);      // goes through the model, fires TblHandler
+	    }
+	}
 	private class ColListener implements MouseListener{
 		@Override
 		public void mouseClicked(MouseEvent e) {
@@ -151,7 +188,7 @@ public class SpTables {
 						}
 					}
 					double w = Tbl.getFontMetrics(Tbl.getFont()).getStringBounds(TblData[j][icol], Tbl.getGraphics()).getWidth();
-					System.out.println(w);
+					//System.out.println(w);
 					col.setPreferredWidth((biggest == 0) ? 75 : (int)Math.ceil(w)+10);
 				}
 			}
@@ -173,11 +210,46 @@ public class SpTables {
 			// TODO Auto-generated method stub	
 		}
 	}
+	/*
+	 * This code is to make buttons that "updates" 
+	 * a cell to re-run its code. I do not know
+	 * if im going to use this outside of debug.
+	 */
+	
+	private class TblListener implements MouseListener{
+		@Override
+		public void mouseClicked(MouseEvent e) {
+			int row = Tbl.rowAtPoint(e.getPoint());
+			int col = Tbl.columnAtPoint(e.getPoint());
+			if (e.getClickCount() == 2) {
+				if (row < 0 || col < 0) return;
+				OpenEditDialog(row, col);
+				return;
+			}
+			String val = (Tbl.getValueAt(row, col) == null ? "": Tbl.getValueAt(row, col).toString());
+			if(val == null) return;
+			//button debug
+			TblDataModel.fireTableCellUpdated(row, col);
+		}
+		@Override
+		public void mouseEntered(MouseEvent arg0) {
+		}
+		@Override
+		public void mouseExited(MouseEvent arg0) {
+		}
+		@Override
+		public void mousePressed(MouseEvent arg0) {
+		}
+		@Override
+		public void mouseReleased(MouseEvent arg0) {
+		}
+		
+	}
 	SpTables() {	
 		gson = new GsonBuilder().setPrettyPrinting().create();
 		TblHandler = new SpTblHandler(); 
 		TblData = new String[TblH][TblW];
-		TblDataModel = (TableModel) new AbstractTableModel() {
+		TblDataModel = new AbstractTableModel() {
 			@Override
 	    	public int getColumnCount() { 
 	    		return TblW; 
@@ -192,7 +264,7 @@ public class SpTables {
 	        }
 			@Override
 			public boolean isCellEditable(int row,int col) {
-				return true;
+				return false;
 			}
 			@Override
 			public void setValueAt(Object value,int row,int col) {
@@ -202,23 +274,17 @@ public class SpTables {
 			
 	    };
 	    // ONLY FOR TESTING!!! 
-	    /*
-	    TblData[0][0] =  "First Row First Column";
-	    TblData[1][0] =  "Second Row First Column";
-	    TblData[0][1] =  "First Row Second Column";
-	    TblData[1][1] =  "Second Row Second Column";
-	    TblData[0][3] =  "First Row Fourth Column";
-	    TblData[1][3] =  "Second Row Fourth Column";
-	    */
+	    TblData[0][0] =  ":SUM(:SUM(3,2),2)";
 	    // ONLY FOR TESTING!!! end
 	    TblDataModel.addTableModelListener(TblHandler);
 	    Tbl = new JTable(TblDataModel);
-	    Tbl.setDefaultEditor(Object.class, new EditDialog());
+	    //Tbl.setDefaultEditor(Object.class, new EditDialog());
 	    Tbl.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 	    TblScroll = new JScrollPane(Tbl);
 	    Tbl.getTableHeader().setReorderingAllowed(false);
 	    Tbl.getTableHeader().addMouseListener(new ColListener());
-	    JList<String> TblRows = new JList<>(new AbstractListModel<String>() {
+	    Tbl.addMouseListener(new TblListener());
+	    TblRows = new JList<>(new AbstractListModel<String>() {
 			@Override
 			public int getSize() {
 				return Tbl.getRowCount();
