@@ -70,6 +70,28 @@ public class SpTables {
 	 * to query and save the spreadsheet. Not now,
 	 * as it is a small project.
 	 */
+	public String GetCellRef(String at) {
+		String letters = "";
+		int row = 0;
+		int col = 0;
+		int i = 1;
+		for(i = 1;i < at.length();i++) {
+			letters = at.substring(0, i);
+			if(!letters.matches("[A-Z]+")) {
+				break;
+			}
+		}
+		i--;
+		if(i == at.length()) throw new RuntimeException("CELL REFERENCE CONTAINS NO ROW INDEX: "+at);
+		for(int j = 0;j < letters.length();j++) {
+			int cur = Character.valueOf(letters.charAt(j)) - Character.valueOf('A')+1;
+			cur *= Math.pow(26, letters.length()-j-1);
+			col += cur;
+		}
+		col--; // 0-based column-indexing;
+		row = Integer.valueOf(at.substring(i));
+		return TblData[row][col];
+	}
 	public String GetFilePath() {
 		JFileChooser fc = new JFileChooser();
 		FileNameExtensionFilter ef = new FileNameExtensionFilter("SP Files", "json","sp");
@@ -274,7 +296,10 @@ public class SpTables {
 			
 	    };
 	    // ONLY FOR TESTING!!! 
-	    TblData[0][0] =  ":SUM(:SUM(3,2),2)";
+	    TblData[1][0] =  ":SUM(:SUM(A1,B1),2)";
+	    TblData[0][0] =  "6";
+	    TblData[0][1] =  "5";
+	    GetCellRef("A1");
 	    // ONLY FOR TESTING!!! end
 	    TblDataModel.addTableModelListener(TblHandler);
 	    Tbl = new JTable(TblDataModel);

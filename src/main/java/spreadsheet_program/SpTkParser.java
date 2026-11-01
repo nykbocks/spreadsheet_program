@@ -22,6 +22,8 @@ public class SpTkParser {
 		public PrE type;
 		public String value;
 		public List<PrNode> args = new ArrayList<>();
+		public String rangeStart; // for RANGE
+		public String rangeEnd; // for RANGE
 	}
 	List<Tk> tokens;
 	int peek; // current token
@@ -61,7 +63,10 @@ public class SpTkParser {
 		case NUMBER:
 			Advance();
 			return new PrNode(PrE.NUMBER,t.value);
-		//case STRING:
+		case STRING:
+			// for now no cell ranges like [A1,B1]
+			Advance();
+			return new PrNode(PrE.CELLREF,t.value);
 		case COLON:
 			Advance();
 			return ParseCall();
