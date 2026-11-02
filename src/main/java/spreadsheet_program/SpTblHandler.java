@@ -8,6 +8,7 @@ import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import javax.swing.table.TableModel;
 
+import spreadsheet_program.SpTables.Cell;
 import spreadsheet_program.SpTkParser.PrE;
 import spreadsheet_program.SpTkParser.PrNode;
 import spreadsheet_program.SpTkTokenizer.Tk;
@@ -27,16 +28,20 @@ public class SpTblHandler implements TableModelListener{
 			}
 		}
 		i--;
+		letters = at.substring(0,i);
 		if(i == at.length()) throw new RuntimeException("CELL REFERENCE CONTAINS NO ROW INDEX: "+at);
 		for(int j = 0;j < letters.length();j++) {
 			int cur = Character.valueOf(letters.charAt(j)) - Character.valueOf('A')+1;
 			cur *= Math.pow(26, letters.length()-j-1);
 			col += cur;
 		}
+		
 		col--; // 0-based column-indexing;
 		row = Integer.valueOf(at.substring(i));
 		row--;
-		return String.valueOf(tbl.getValueAt(row, col));
+		System.out.println(row);
+		Cell c = (Cell) tbl.getValueAt(row, col);
+		return (c == null || c.out.isEmpty()) ? "0" : c.out;
 	}
 	private void printTree(PrNode n,int d) {
 		String rep = "";
@@ -78,9 +83,17 @@ public class SpTblHandler implements TableModelListener{
 	@Override
 	public void tableChanged(TableModelEvent e) {
 		TableModel tbl_data = (TableModel) e.getSource();
-		Object str = tbl_data.getValueAt(e.getLastRow(), e.getColumn());
-		if(str == null) return;
-		String CurTbl = str.toString();
+		Cell cell = (Cell) tbl_data.getValueAt(e.getLastRow(), e.getColumn());
+		if(cell == null) return;
+		if(cell.exp == null || cell.exp.isEmpty()) {
+			cell.out = "";
+			return;
+		}
+		if(!cell.exp.startsWith(":")) {
+			cell.out = cell.exp;
+			return;
+		}
+		String CurTbl = cell.exp;
 		SpTkTokenizer Tk = new SpTkTokenizer();
 		List<Tk> TkList = Tk.ComputeTokens(CurTbl);
 		for(int i = 0;i < TkList.size();i++) {
@@ -90,55 +103,15 @@ public class SpTblHandler implements TableModelListener{
 		
 		SpTkParser Parser = new SpTkParser();
 		PrNode RootParse = Parser.Parse(TkList);
-		//printTree(RootParse,0);
-		System.out.println(EvaluateNode(RootParse,tbl_data));
-		/*
-		//System.out.println(CurTbl);
-		//Parser
-		int oldi = 0;
-		for(int i = 0;i < CurTbl.length();i++) {
-			if(CurTbl.charAt(i) == '(' ||
-			   CurTbl.charAt(i) == ',' ||
-			   CurTbl.charAt(i) == ')') {
-				if(i == 0) return;
-				TkStrList.add(CurTbl.substring(oldi, i));
-				TkStrList.add(String.valueOf(CurTbl.charAt(i)));
-				oldi = i+1;
+		if(cell.exp.startsWith(":")) {
+			try {
+				cell.out = EvaluateNode(RootParse,tbl_data);
+			} catch (RuntimeException ex){
+				cell.out = "#ERROR";
 			}
+		} else {
+			cell.out = cell.exp;
 		}
-		if(TkStrList.isEmpty()) return;
-		//System.out.println(TkStrList.size());
-		for(int i = 0;i < TkStrList.size();i++) {
-			String s = TkStrList.get(i);
-			switch(s) {
-			case "SUM":
-				Tk token = new Tk();
-				token.args = new ArrayList<>();
-				token.func = TkE.SUM;
-				
-				int j = i+1;
-				String ts = "";
-				while(ts != ")" && j < TkStrList.size()) {
-					ts = TkStrList.get(j).toString();
-					//System.out.println(ts);
-					token.args.add(ts);
-					j++;
-				}
-				TkList.add(token);
-			}
-			//System.out.println(s);
-		}
-		if(TkList.isEmpty()) {
-			System.out.println("OUT");
-			return;
-		}
-		for(int i = 0;i<TkList.size();i++) {
-			for(int j = 0;j < TkList.get(i).args.size();j++) {
-				System.out.print("FUNC:" + TkList.get(i).func.toString() + " | ");
-				System.out.println("ARG "+j+":"+TkList.get(i).args.get(j));
-			}
-		}
-		*/
 	}
 }
 

@@ -43,17 +43,60 @@ import org.w3c.dom.Text;
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 public class SpTables {
-
+	public class Cell {
+		String out; // output; is read-only (only EvaluateNode must change it)
+		String exp; // expression; (may be just a string)
+		@Override
+		public String toString() {
+			return out;
+		}
+	}
 	//Tables
 	private Gson gson;
 	public AbstractTableModel TblDataModel;
 	public JTable Tbl;
 	public JScrollPane TblScroll;
-	public String[][] TblData;
+	public Cell[][] TblData;
 	public SpTblHandler TblHandler;
 	public int TblW = 100; 
 	public int TblH = 100;
 	public JList<String> TblRows;
+	public String GetCellRef(String at) {
+		String letters = "";
+		int row = 0;
+		int col = 0;
+		int i = 1;
+		for(i = 1;i < at.length();i++) {
+			letters = at.substring(0, i);
+			if(!letters.matches("[A-Z]+")) {
+				break;
+			}
+		}
+		i--;
+		letters = at.substring(0,i);
+		if(i == at.length()) throw new RuntimeException("CELL REFERENCE CONTAINS NO ROW INDEX: "+at);
+		for(int j = 0;j < letters.length();j++) {
+			int cur = Character.valueOf(letters.charAt(j)) - Character.valueOf('A')+1;
+			cur *= Math.pow(26, letters.length()-j-1);
+			col += cur;
+		}
+		col--; // 0-based column-indexing;
+		row = Integer.valueOf(at.substring(i));
+		return TblData[row][col].exp;
+	}
+	public String GetFilePath() {
+		JFileChooser fc = new JFileChooser();
+		FileNameExtensionFilter ef = new FileNameExtensionFilter("SP Files", "json","sp");
+		fc.setFileFilter(ef);
+		fc.setCurrentDirectory(new java.io.File("."));
+		fc.setLocation(0, 0);
+		int rfc = fc.showOpenDialog(Tbl);
+		String path = null;
+		if(rfc == JFileChooser.APPROVE_OPTION) {
+			path = fc.getSelectedFile().getAbsolutePath();
+		}
+		return path;
+	}
 	/*
 	 * On the Load and Save methods:
 	 * 
@@ -69,42 +112,11 @@ public class SpTables {
 	 * TODO: Make this use a database (SQLite,probably)
 	 * to query and save the spreadsheet. Not now,
 	 * as it is a small project.
+	 * 
+	 * Also,as we refactored the cell structure,the functions
+	 * run even when their arguments have not loaded,i am going
+	 * to fix it now.
 	 */
-	public String GetCellRef(String at) {
-		String letters = "";
-		int row = 0;
-		int col = 0;
-		int i = 1;
-		for(i = 1;i < at.length();i++) {
-			letters = at.substring(0, i);
-			if(!letters.matches("[A-Z]+")) {
-				break;
-			}
-		}
-		i--;
-		if(i == at.length()) throw new RuntimeException("CELL REFERENCE CONTAINS NO ROW INDEX: "+at);
-		for(int j = 0;j < letters.length();j++) {
-			int cur = Character.valueOf(letters.charAt(j)) - Character.valueOf('A')+1;
-			cur *= Math.pow(26, letters.length()-j-1);
-			col += cur;
-		}
-		col--; // 0-based column-indexing;
-		row = Integer.valueOf(at.substring(i));
-		return TblData[row][col];
-	}
-	public String GetFilePath() {
-		JFileChooser fc = new JFileChooser();
-		FileNameExtensionFilter ef = new FileNameExtensionFilter("SP Files", "json","sp");
-		fc.setFileFilter(ef);
-		fc.setCurrentDirectory(new java.io.File("."));
-		fc.setLocation(0, 0);
-		int rfc = fc.showOpenDialog(Tbl);
-		String path = null;
-		if(rfc == JFileChooser.APPROVE_OPTION) {
-			path = fc.getSelectedFile().getAbsolutePath();
-		}
-		return path;
-	}
 	public void saveFileAs(String fileloc) {
 		String path = GetFilePath();
 		if(path == null) return;
@@ -113,9 +125,9 @@ public class SpTables {
 			for(int i = 0;i < Tbl.getColumnCount(); i++) {
 				List<Object> row = new ArrayList<>();
 				for(int j = 0;j < Tbl.getRowCount(); j++) {
-					Object a = Tbl.getValueAt(j, i);
+					Cell a = (Cell) Tbl.getValueAt(j, i);
 					if(a == null) continue;
-					row.add(a.toString());
+					row.add(a.exp.toString());
 				}
 				//if(row.isEmpty()) continue;
 				data.add(row);
@@ -132,10 +144,17 @@ public class SpTables {
 			List<List<Object>> data = new ArrayList<>();
 			Type type = new TypeToken<List<List<Object>>>(){}.getType();
 			data = gson.fromJson(r, type);
+			//this is genuinly so bad kek
 			for(int i = 0;i < data.size(); i++) {
 				if(data.get(i).size() == 0) continue;
 				for(int j = 0;j < data.get(i).size(); j++) {
-					Tbl.setValueAt(data.get(i).get(j), j, i);
+					TblData[j][i].exp = data.get(i).get(j).toString();
+				}
+			}
+			//refresh cells outputs 
+			for(int row = 0; row < TblH;row++) {
+				for(int col = 0; col < TblW;col++) {
+					TblDataModel.fireTableCellUpdated(row, col);
 				}
 			}
 		}catch (IOException e) {
@@ -176,14 +195,14 @@ public class SpTables {
 	}
 	private void OpenEditDialog(int row,int col) {
 		
-	    Object current = Tbl.getValueAt(row, col);
-	    JTextArea area = new JTextArea(current == null ? "" : current.toString(), 20, 50);
+	    Cell current = TblData[row][col];
+	    JTextArea area = new JTextArea(current == null ? "" : current.exp, 20, 50);
 	    area.setLineWrap(true);
 	    area.setWrapStyleWord(true);
 	    int result = JOptionPane.showConfirmDialog(
 	            Tbl,
 	            new JScrollPane(area),
-	            "Edit " + Tbl.getColumnName(col) + row,   // your row header starts at 0, so no +1
+	            "Edit " + Tbl.getColumnName(col) + row+1,   // your row header starts at 0, so no +1
 	            JOptionPane.OK_CANCEL_OPTION,
 	            JOptionPane.PLAIN_MESSAGE);
 
@@ -204,12 +223,12 @@ public class SpTables {
 					int j = 0;
 					for(int i = 0; i < TblH; i++) {
 						if(TblData[i][icol] == null) continue;
-						if(TblData[i][icol].length() > biggest) {
-							biggest = TblData[i][icol].length();
+						if(TblData[i][icol].out.length() > biggest) {
+							biggest = TblData[i][icol].out.length();
 							j = i;
 						}
 					}
-					double w = Tbl.getFontMetrics(Tbl.getFont()).getStringBounds(TblData[j][icol], Tbl.getGraphics()).getWidth();
+					double w = Tbl.getFontMetrics(Tbl.getFont()).getStringBounds(TblData[j][icol].out, Tbl.getGraphics()).getWidth();
 					//System.out.println(w);
 					col.setPreferredWidth((biggest == 0) ? 75 : (int)Math.ceil(w)+10);
 				}
@@ -243,12 +262,13 @@ public class SpTables {
 		public void mouseClicked(MouseEvent e) {
 			int row = Tbl.rowAtPoint(e.getPoint());
 			int col = Tbl.columnAtPoint(e.getPoint());
+			Cell get = TblData[row][col];
 			if (e.getClickCount() == 2) {
 				if (row < 0 || col < 0) return;
 				OpenEditDialog(row, col);
 				return;
 			}
-			String val = (Tbl.getValueAt(row, col) == null ? "": Tbl.getValueAt(row, col).toString());
+			String val = (get.exp == null ? "": get.exp);
 			if(val == null) return;
 			//button debug
 			TblDataModel.fireTableCellUpdated(row, col);
@@ -270,7 +290,14 @@ public class SpTables {
 	SpTables() {	
 		gson = new GsonBuilder().setPrettyPrinting().create();
 		TblHandler = new SpTblHandler(); 
-		TblData = new String[TblH][TblW];
+		TblData = new Cell[TblH][TblW];
+		for(int i = 0;i<TblH;i++) {
+			for(int j = 0;j<TblW;j++) {
+				TblData[i][j] = new Cell();
+				TblData[i][j].out = new String();
+				TblData[i][j].exp = new String();
+			}
+		}
 		TblDataModel = new AbstractTableModel() {
 			@Override
 	    	public int getColumnCount() { 
@@ -290,18 +317,21 @@ public class SpTables {
 			}
 			@Override
 			public void setValueAt(Object value,int row,int col) {
-				TblData[row][col] = value.toString();
+				TblData[row][col].exp = value.toString();
 		        this.fireTableCellUpdated(row, col);
 			}
 			
 	    };
+
+	    TblDataModel.addTableModelListener(TblHandler);
 	    // ONLY FOR TESTING!!! 
-	    TblData[1][0] =  ":SUM(:SUM(A1,B1),2)";
-	    TblData[0][0] =  "6";
-	    TblData[0][1] =  "5";
+	    /*
+	    TblDataModel.setValueAt("6", 0, 0);
+	    TblDataModel.setValueAt("7", 0, 1);
+	    TblDataModel.setValueAt(":SUM(:SUM(A1,B1),2)", 1, 0);
+	    */
 	    GetCellRef("A1");
 	    // ONLY FOR TESTING!!! end
-	    TblDataModel.addTableModelListener(TblHandler);
 	    Tbl = new JTable(TblDataModel);
 	    //Tbl.setDefaultEditor(Object.class, new EditDialog());
 	    Tbl.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
@@ -316,7 +346,7 @@ public class SpTables {
 			}
 			@Override
 			public String getElementAt(int index) {
-				return String.valueOf(index);
+				return String.valueOf(index+1);
 			}
 		});
 	    TblRows.setCellRenderer(new DefaultListCellRenderer() {
@@ -327,7 +357,7 @@ public class SpTables {
 					int index,
 					boolean isSelected,
 					boolean cellHasFocus) 
-				{
+				{				
 				JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, false, false);
 				label.setFont(Tbl.getFont());
 				label.setHorizontalAlignment(CENTER);
