@@ -15,8 +15,7 @@ import spreadsheet_program.SpTkTokenizer.Tk;
 import spreadsheet_program.SpTkTokenizer.TkE;
 
 public class SpTblHandler implements TableModelListener{
-
-	public String GetCellRef(String at,TableModel tbl) {
+	public int GetCellRefCOL(String at,TableModel tbl) {
 		String letters = "";
 		int row = 0;
 		int col = 0;
@@ -35,11 +34,28 @@ public class SpTblHandler implements TableModelListener{
 			cur *= Math.pow(26, letters.length()-j-1);
 			col += cur;
 		}
-		
 		col--; // 0-based column-indexing;
+		return col;
+	}
+	public int GetCellRefROW(String at,TableModel tbl) {
+		String letters = "";
+		int row = 0;
+		int i = 1;
+		for(i = 1;i < at.length();i++) {
+			letters = at.substring(0, i);
+			if(!letters.matches("[A-Z]+")) {
+				break;
+			}
+		}
+		i--;
+		letters = at.substring(0,i);
 		row = Integer.valueOf(at.substring(i));
 		row--;
-		System.out.println(row);
+		return row;
+	}
+	public String GetCellRef(String at,TableModel tbl) {
+		int row = GetCellRefROW(at,tbl);
+		int col = GetCellRefCOL(at,tbl);
 		Cell c = (Cell) tbl.getValueAt(row, col);
 		return (c == null || c.out.isEmpty()) ? "0" : c.out;
 	}
@@ -52,6 +68,19 @@ public class SpTblHandler implements TableModelListener{
 		for(PrNode a: n.args) {
 			printTree(a,d+1);
 		}
+	}
+	public List<String> GetCellRange(TableModel data,String rSta,String rEnd){
+		List<String> list = new ArrayList<>();
+		int rsCol = GetCellRefCOL(rSta,data);
+		int rsRow = GetCellRefROW(rSta,data);
+		int reCol = GetCellRefCOL(rEnd,data);
+		int reRow = GetCellRefROW(rEnd,data);
+		for(int row = rsRow;row <= reRow;row++) {
+			for(int col = rsCol;col <= reCol;col++) {
+				list.add(data.getValueAt(row, col).toString());
+			}
+		}
+		return list;
 	}
 	public String EvaluateNode(PrNode root,TableModel tbl_data) {
 		String ret = new String();
@@ -69,6 +98,13 @@ public class SpTblHandler implements TableModelListener{
 					break;
 				case CELLREF:
 					result += Integer.valueOf(GetCellRef(a.value, tbl_data));
+					break;
+				case RANGE:
+					List<String> range = GetCellRange(tbl_data,a.rangeStart,a.rangeEnd);
+					System.out.println(range.size());
+					for(String value: range) {
+						result += Integer.valueOf(value);
+					}
 					break;
 				default:
 					throw new RuntimeException("EXPECTED NUMBER AT "+root.value+"(...,"+a.value+",..)");
@@ -96,9 +132,6 @@ public class SpTblHandler implements TableModelListener{
 		String CurTbl = cell.exp;
 		SpTkTokenizer Tk = new SpTkTokenizer();
 		List<Tk> TkList = Tk.ComputeTokens(CurTbl);
-		for(int i = 0;i < TkList.size();i++) {
-			System.out.println("TYPE:"+TkList.get(i).tp+" VALUE:"+TkList.get(i).value);
-		}
 		//return TkList;
 		
 		SpTkParser Parser = new SpTkParser();

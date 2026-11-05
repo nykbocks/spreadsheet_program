@@ -52,7 +52,8 @@ public class SpTkParser {
 			throw new RuntimeException("EXPECTED " + type + ",GOT END OF FUNC (NULL)");
 		}
 		if( type != t.tp) { 
-			throw new RuntimeException("EXPECTED " + type + ",GOT " + t.tp);
+			//throw new RuntimeException("EXPECTED " + type + ",GOT " + t.tp);
+			return null;
 		}
 		//System.out.println("EXPECT "+type+":"+t.tp);	
 		return Advance();
@@ -64,9 +65,23 @@ public class SpTkParser {
 			Advance();
 			return new PrNode(PrE.NUMBER,t.value);
 		case STRING:
-			// for now no cell ranges like [A1,B1]
 			Advance();
 			return new PrNode(PrE.CELLREF,t.value);
+		case OPEN_RANGE:
+			/*
+			 * Really janky way to do it:
+			 * Because a range is [open,close]
+			 * - only two arguments - we can
+			 * hardcode the expectations for it.
+			 */
+			Advance();
+			PrNode node = new PrNode(PrE.RANGE,"");
+			node.rangeStart = Expect(TkE.STRING).value; // first parameter
+			Expect(TkE.COMMA); // necessary comma
+			node.rangeEnd = Expect(TkE.STRING).value; // second parameter
+			Expect(TkE.CLSE_RANGE);
+			//Advance();
+			return node;
 		case COLON:
 			Advance();
 			return ParseCall();

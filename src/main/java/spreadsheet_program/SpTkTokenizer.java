@@ -8,6 +8,8 @@ public class SpTkTokenizer {
 		FUNC,
 		OPEN_PTHESES,
 		CLSE_PTHESES,
+		OPEN_RANGE, // [
+		CLSE_RANGE, // ]
 		NUMBER,
 		COMMA,
 		STRING,
@@ -37,8 +39,10 @@ public class SpTkTokenizer {
 		if(IsNumeric(s)) token = TkE.NUMBER;
 		else if(s.equals("("))  token = TkE.OPEN_PTHESES;
 		else if(s.equals(")"))  token = TkE.CLSE_PTHESES;
-		else if(s.equals(",")) token = TkE.COMMA;
-		else if(s.equals(":")) token = TkE.COLON;
+		else if(s.equals("["))  token = TkE.OPEN_RANGE;
+		else if(s.equals("]"))  token = TkE.CLSE_RANGE;
+		else if(s.equals(","))  token = TkE.COMMA;
+		else if(s.equals(":"))  token = TkE.COLON;
 		else token = TkE.STRING;
 		return token;
 	}
@@ -56,7 +60,12 @@ public class SpTkTokenizer {
 		StringBuilder buffer = new StringBuilder();
 		for(int i = 0;i < CurTbl.length();i++) {
 			char c = CurTbl.charAt(i);
-			if(c == ':' || c == '(' || c == ',' || c == ')') {
+			if(c == ':' || 
+			   c == '(' || 
+			   c == '[' || 
+			   c == ']' || 
+			   c == ',' || 
+			   c == ')') {
 				FlushBuffer(TkList,buffer,c == '(');
 				String cs = String.valueOf(c);
 				AddToken(TkList,EvaluateStr(cs),cs);

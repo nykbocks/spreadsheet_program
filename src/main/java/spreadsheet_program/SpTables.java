@@ -202,12 +202,12 @@ public class SpTables {
 	    int result = JOptionPane.showConfirmDialog(
 	            Tbl,
 	            new JScrollPane(area),
-	            "Edit " + Tbl.getColumnName(col) + row+1,   // your row header starts at 0, so no +1
+	            "Edit " + Tbl.getColumnName(col) + row+1,  
 	            JOptionPane.OK_CANCEL_OPTION,
 	            JOptionPane.PLAIN_MESSAGE);
 
 	    if (result == JOptionPane.OK_OPTION) {
-	        Tbl.setValueAt(area.getText(), row, col);      // goes through the model, fires TblHandler
+	        Tbl.setValueAt(area.getText(), row, col);      
 	    }
 	}
 	private class ColListener implements MouseListener{
@@ -325,11 +325,13 @@ public class SpTables {
 
 	    TblDataModel.addTableModelListener(TblHandler);
 	    // ONLY FOR TESTING!!! 
-	    /*
-	    TblDataModel.setValueAt("6", 0, 0);
-	    TblDataModel.setValueAt("7", 0, 1);
-	    TblDataModel.setValueAt(":SUM(:SUM(A1,B1),2)", 1, 0);
-	    */
+	    
+	    TblDataModel.setValueAt("1", 0, 0);
+	    TblDataModel.setValueAt("2", 0, 1);
+	    TblDataModel.setValueAt("3", 1, 0);
+	    TblDataModel.setValueAt("4", 1, 1);
+	    TblDataModel.setValueAt(":SUM([A1,B2])", 0, 5);
+	    
 	    GetCellRef("A1");
 	    // ONLY FOR TESTING!!! end
 	    Tbl = new JTable(TblDataModel);
