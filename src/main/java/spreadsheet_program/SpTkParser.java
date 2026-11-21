@@ -52,8 +52,7 @@ public class SpTkParser {
 			throw new RuntimeException("EXPECTED " + type + ",GOT END OF FUNC (NULL)");
 		}
 		if( type != t.tp) { 
-			//throw new RuntimeException("EXPECTED " + type + ",GOT " + t.tp);
-			return null;
+			throw new RuntimeException("EXPECTED " + type + ",GOT " + t.tp);
 		}
 		//System.out.println("EXPECT "+type+":"+t.tp);	
 		return Advance();

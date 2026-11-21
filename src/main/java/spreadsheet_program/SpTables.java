@@ -3,6 +3,10 @@ package spreadsheet_program;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Toolkit;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.io.BufferedWriter;
@@ -42,10 +46,16 @@ import javax.swing.table.TableModel;
 import org.w3c.dom.Text;
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
+
+import spreadsheet_program.SpTables.Cell;
+import spreadsheet_program.SpTkParser.PrNode;
+import spreadsheet_program.SpTkTokenizer.Tk;
+import spreadsheet_program.SpTkTokenizer.TkE;
 public class SpTables {
 	public class Cell {
 		String out; // output; is read-only (only EvaluateNode must change it)
 		String exp; // expression; (may be just a string)
+		List<String> deps = new ArrayList<>(); // depedencies; functions that use this cell  
 		@Override
 		public String toString() {
 			return out;
@@ -53,17 +63,126 @@ public class SpTables {
 	}
 	//Tables
 	private Gson gson;
-	public AbstractTableModel TblDataModel;
-	public JTable Tbl;
+	public static AbstractTableModel TblDataModel;
+	public static JTable Tbl;
 	public JScrollPane TblScroll;
-	public Cell[][] TblData;
+	public static Cell[][] TblData;
 	public SpTblHandler TblHandler;
-	public int TblW = 100; 
-	public int TblH = 100;
-	public JList<String> TblRows;
-	public String GetCellRef(String at) {
+	public static int TblW = 100; 
+	public static int TblH = 100;
+	public static JList<String> TblRows;
+	public void SetZoom(int z) {
+		Font zoom = new Font("Arial",Font.PLAIN,z);
+		TblRows.setCellRenderer(new DefaultListCellRenderer() {
+			@Override
+			public Component getListCellRendererComponent(
+					JList<? extends Object> list,
+					Object value,
+					int index,
+					boolean isSelected,
+					boolean cellHasFocus) 
+				{				
+				JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, false, false);
+				label.setFont(zoom);
+				label.setHorizontalAlignment(CENTER);
+				label.setOpaque(true);
+				label.setBackground(UIManager.getColor("TableHeader.background"));
+				label.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 1, Color.black));
+				return label;
+			}
+	    });
+		int h = (int)TblRows.getFontMetrics(zoom).getStringBounds("100", TblRows.getGraphics()).getHeight();
+		int w = (int)TblRows.getFontMetrics(zoom).getStringBounds("1000", TblRows.getGraphics()).getWidth();
+		FontMetrics font_metrics = TblRows.getFontMetrics(zoom);
+		
+		TblRows.setFixedCellHeight(h);
+		TblRows.setFixedCellWidth(w);
+		Tbl.setFont(zoom);
+		Tbl.setRowHeight(h);
+		Tbl.getTableHeader().setFont(zoom);
+		int cw = font_metrics.stringWidth("MMM")+16;
+		TableColumnModel m = Tbl.getColumnModel();
+		for(int i = 0; i< m.getColumnCount();i++) {
+			TableColumn col = m.getColumn(i);
+			col.setPreferredWidth(cw);
+		}
+		
+	}
+	public static String ColName(int col) {
+	    StringBuilder sb = new StringBuilder();
+	    for (col++; col > 0; col = (col - 1) / 26)
+	        sb.append((char) ('A' + (col - 1) % 26));
+	    return sb.reverse().toString();
+	}
+	public static void CollectRefs(PrNode node,List<String> out){
+		switch(node.type) {
+		case CELLREF:
+			out.add(node.value);
+			break;
+		case RANGE:
+			for(String s: GetCellRangeRefs(TblDataModel,node.rangeStart,node.rangeEnd)) {
+				System.out.println(s);
+				out.add(s);
+			}
+			break;
+		case CALL:
+			for(PrNode arg: node.args) {
+				CollectRefs(arg,out);
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	public static void CallFunc(int r,int c) {
+		Cell cell = TblData[r][c];
+		String CurTbl = cell.exp;
+		if(!cell.exp.startsWith(":")) {
+			cell.out = cell.exp;
+			return;
+		}
+		SpTkTokenizer Tk = new SpTkTokenizer();
+		List<Tk> TkList = Tk.ComputeTokens(CurTbl);
+		SpTkParser Parser = new SpTkParser();
+		PrNode RootParse = Parser.Parse(TkList);
+		//get self cell reference
+		String at = ColName(c) + (r+1);
+		List<String> refs = new ArrayList<>();
+		CollectRefs(RootParse,refs);
+		for(String cellref: refs) {
+			int ar = GetCellRefROW(cellref,TblDataModel);
+			int ac = GetCellRefCOL(cellref,TblDataModel);
+			Cell cur = GetCell(ar,ac);
+			if (cur.equals(at)) throw new RuntimeException("CELL REFERENCES ITSELF");
+			if (cur != null && !cur.deps.contains(at)) cur.deps.add(at.toString());
+		}
+		if(cell.exp.startsWith(":")) {
+			try {
+				cell.out = SpFunctions.EvaluateNode(RootParse,TblDataModel);
+			} catch (RuntimeException ex){
+				cell.out = "#ERROR";
+			}
+		} else {
+			cell.out = cell.exp;
+		}
+	}
+	public static void ReCalcCell(int r,int c,java.util.Set<String> visiting) {
+		String cur = ColName(c) + (r+1);
+		//cant add ourself to the visiting list (in a loop)
+		if(!visiting.add(cur)) {
+			TblData[r][c].out = "#CYCLE";
+			return;
+		}
+		CallFunc(r,c);
+		for(String dep: TblData[r][c].deps) {
+			int dr = GetCellRefROW(dep,TblDataModel);
+			int dc = GetCellRefCOL(dep,TblDataModel);
+			ReCalcCell(dr,dc,visiting);
+		}
+		visiting.remove(cur);
+	}
+	public static int GetCellRefCOL(String at,TableModel tbl) {
 		String letters = "";
-		int row = 0;
 		int col = 0;
 		int i = 1;
 		for(i = 1;i < at.length();i++) {
@@ -74,15 +193,67 @@ public class SpTables {
 		}
 		i--;
 		letters = at.substring(0,i);
-		if(i == at.length()) throw new RuntimeException("CELL REFERENCE CONTAINS NO ROW INDEX: "+at);
+		if(i == at.length()) throw new RuntimeException("NOT A CELL INDEX: "+ at);
 		for(int j = 0;j < letters.length();j++) {
 			int cur = Character.valueOf(letters.charAt(j)) - Character.valueOf('A')+1;
 			cur *= Math.pow(26, letters.length()-j-1);
 			col += cur;
 		}
 		col--; // 0-based column-indexing;
+		return col;
+	}
+	public static int GetCellRefROW(String at,TableModel tbl) {
+		String letters = "";
+		int row = 0;
+		int i = 1;
+		for(i = 1;i < at.length();i++) {
+			letters = at.substring(0, i);
+			if(!letters.matches("[A-Z]+")) {
+				break;
+			}
+		}
+		i--;
+		letters = at.substring(0,i);
 		row = Integer.valueOf(at.substring(i));
-		return TblData[row][col].exp;
+		row--;
+		return row;
+	}
+	public static List<String> GetCellRangeRefs(TableModel data,String rSta,String rEnd){
+		List<String> list = new ArrayList<>();
+		int rsCol = GetCellRefCOL(rSta,data);
+		int rsRow = GetCellRefROW(rSta,data);
+		int reCol = GetCellRefCOL(rEnd,data);
+		int reRow = GetCellRefROW(rEnd,data);
+		for(int row = rsRow;row <= reRow;row++) {
+			for(int col = rsCol;col <= reCol;col++) {
+				list.add(ColName(col) + (row+1));
+			}
+		}
+		return list;
+	}
+	public static List<String> GetCellRange(TableModel data,String rSta,String rEnd){
+		List<String> list = new ArrayList<>();
+		int rsCol = GetCellRefCOL(rSta,data);
+		int rsRow = GetCellRefROW(rSta,data);
+		int reCol = GetCellRefCOL(rEnd,data);
+		int reRow = GetCellRefROW(rEnd,data);
+		for(int row = rsRow;row <= reRow;row++) {
+			for(int col = rsCol;col <= reCol;col++) {
+				list.add(data.getValueAt(row, col).toString());
+			}
+		}
+		return list;
+	}
+	public static String GetCellRef(String at,TableModel tbl) {
+		int row = SpTables.GetCellRefROW(at,tbl);
+		int col = SpTables.GetCellRefCOL(at,tbl);
+		Cell c = (Cell) tbl.getValueAt(row, col);
+		return (c == null || c.out.isEmpty()) ? "0" : c.out;
+	}
+	public static Cell GetCell(int r,int c) {
+		if(r > TblH || r < 0) return null;
+		if(c > TblW || c < 0) return null;
+		return TblData[r][c]; 
 	}
 	public String GetFilePath() {
 		JFileChooser fc = new JFileChooser();
@@ -193,16 +364,16 @@ public class SpTables {
 			return new JTable();
 		}
 	}
-	private void OpenEditDialog(int row,int col) {
-		
+	static void OpenEditDialog(int row,int col) {
 	    Cell current = TblData[row][col];
 	    JTextArea area = new JTextArea(current == null ? "" : current.exp, 20, 50);
 	    area.setLineWrap(true);
 	    area.setWrapStyleWord(true);
+	    area.setFont(new Font("Arial",Font.BOLD,20));
 	    int result = JOptionPane.showConfirmDialog(
-	            Tbl,
+	            SwingUtilities.getWindowAncestor(Tbl),
 	            new JScrollPane(area),
-	            "Edit " + Tbl.getColumnName(col) + row+1,  
+	            "Edit " + Tbl.getColumnName(col) + (row+1),  
 	            JOptionPane.OK_CANCEL_OPTION,
 	            JOptionPane.PLAIN_MESSAGE);
 
@@ -251,12 +422,6 @@ public class SpTables {
 			// TODO Auto-generated method stub	
 		}
 	}
-	/*
-	 * This code is to make buttons that "updates" 
-	 * a cell to re-run its code. I do not know
-	 * if im going to use this outside of debug.
-	 */
-	
 	private class TblListener implements MouseListener{
 		@Override
 		public void mouseClicked(MouseEvent e) {
@@ -270,8 +435,6 @@ public class SpTables {
 			}
 			String val = (get.exp == null ? "": get.exp);
 			if(val == null) return;
-			//button debug
-			TblDataModel.fireTableCellUpdated(row, col);
 		}
 		@Override
 		public void mouseEntered(MouseEvent arg0) {
@@ -289,7 +452,8 @@ public class SpTables {
 	}
 	SpTables() {	
 		gson = new GsonBuilder().setPrettyPrinting().create();
-		TblHandler = new SpTblHandler(); 
+		SpKeys keys = new SpKeys();
+		TblHandler = new SpTblHandler();
 		TblData = new Cell[TblH][TblW];
 		for(int i = 0;i<TblH;i++) {
 			for(int j = 0;j<TblW;j++) {
@@ -325,14 +489,6 @@ public class SpTables {
 
 	    TblDataModel.addTableModelListener(TblHandler);
 	    // ONLY FOR TESTING!!! 
-	    
-	    TblDataModel.setValueAt("1", 0, 0);
-	    TblDataModel.setValueAt("2", 0, 1);
-	    TblDataModel.setValueAt("3", 1, 0);
-	    TblDataModel.setValueAt("4", 1, 1);
-	    TblDataModel.setValueAt(":SUM([A1,B2])", 0, 5);
-	    
-	    GetCellRef("A1");
 	    // ONLY FOR TESTING!!! end
 	    Tbl = new JTable(TblDataModel);
 	    //Tbl.setDefaultEditor(Object.class, new EditDialog());
@@ -341,6 +497,7 @@ public class SpTables {
 	    Tbl.getTableHeader().setReorderingAllowed(false);
 	    Tbl.getTableHeader().addMouseListener(new ColListener());
 	    Tbl.addMouseListener(new TblListener());
+	    Tbl.addKeyListener(keys);
 	    TblRows = new JList<>(new AbstractListModel<String>() {
 			@Override
 			public int getSize() {
@@ -378,5 +535,11 @@ public class SpTables {
 	    TblRows.setFixedCellHeight(Tbl.getRowHeight());
 	    TblScroll.setRowHeaderView(TblRows);
 	    Tbl.setDragEnabled(false);
+	    TblDataModel.setValueAt("1", 0, 0);
+	    TblDataModel.setValueAt("2", 0, 1);
+	    TblDataModel.setValueAt("3", 1, 0);
+	    TblDataModel.setValueAt("4", 1, 1);
+	    TblDataModel.setValueAt(":SUB([A1,B2],0)", 0, 5);
+	    TblDataModel.setValueAt("BUTTON,A5", 2, 5);
 	}
 }

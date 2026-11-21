@@ -13,7 +13,6 @@ public class SpWin extends JFrame implements Runnable {
 	//Main
 	public int SpWinWidth;
 	public int SpWinHeight;
-	public SpKeys SpKeys = new SpKeys(this);
 	public SpMenu SpMenu;
 	public SpTables SpTables;
 	
@@ -27,9 +26,9 @@ public class SpWin extends JFrame implements Runnable {
 		SpWinWidth = ww;
 		SpWinHeight= wh;
 		this.setPreferredSize(new Dimension(ww,wh));
+		this.setResizable(true);
 	    this.setLayout(new BorderLayout());   // lets the table fill the panel
 		//this.setDoubleBuffered(true);
-		this.addKeyListener(SpKeys);
 		//this.addMouseListener(MouseHandler);
 		this.setFocusable(true);
 		SpTables = new SpTables();

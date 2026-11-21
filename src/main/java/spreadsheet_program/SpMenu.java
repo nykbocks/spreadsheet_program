@@ -11,17 +11,24 @@ import javax.swing.JButton;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
+import javax.swing.JTextArea;
+import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
 public class SpMenu {
 	public static final int MnFILE = 0;
 	public static final int MnEDIT = 1;
+	public static final int MnOPTIONS = 2;
 	public JPanel Panel;
 	public GridLayout Layout;
 	
-	public String[] MenuList = {"File","Edit"};
+	public String[] MenuList = {"File","Edit","Options"};
 	public ActionListener Handler; 
 	public JMenuBar Bar;
 	public JMenu[] Menus;
@@ -49,6 +56,22 @@ public class SpMenu {
 					break;
 				case "file.load_from":
 					Tbls.loadFrom("test.sp");
+					break;
+				case "opt.zoom":
+					SpinnerNumberModel m = new SpinnerNumberModel(0,0,50,1);
+					JSpinner sp = new JSpinner(m);
+					sp.setFont(new Font("Arial",Font.BOLD,15));
+					int result = JOptionPane.showConfirmDialog(
+					        SwingUtilities.getWindowAncestor(Tbls.Tbl),
+					        new JScrollPane(sp),
+					        "Choose Font Size ",  
+					        JOptionPane.OK_CANCEL_OPTION,
+					        JOptionPane.PLAIN_MESSAGE);
+					if (result == JOptionPane.OK_OPTION) {
+						System.out.println("FONT SIZE:"+sp.getValue());
+						Tbls.SetZoom((int)sp.getValue());
+					}
+					break;
 				}
 			}
 		};
@@ -64,5 +87,7 @@ public class SpMenu {
 		Menus[MnFILE].add(MakeMItem("Save as","file.save_as"));
 		Menus[MnFILE].add(MakeMItem("Load from","file.load_from"));
 		Menus[MnFILE].add(MakeMItem("Exit","file.exit"));
+
+		Menus[MnOPTIONS].add(MakeMItem("Set Zoom","opt.zoom"));
 	}
 }
